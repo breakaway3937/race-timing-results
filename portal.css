@@ -82,3 +82,11 @@ h2 { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: v
   .cert { max-width: none; padding: 0; margin: 0; }
   .cert .inner { height: 7.6in; aspect-ratio: auto; }
 }
+
+dialog.sheet { border: 0; border-radius: 16px; padding: 0 20px 20px; width: min(420px, calc(100vw - 32px)); box-shadow: 0 24px 70px rgba(0,0,0,.35); overflow: hidden; }
+dialog.sheet::backdrop { background: rgba(12,13,17,.6); }
+dialog.sheet .bar { height: 5px; background: var(--accent); margin: 0 -20px 16px; }
+dialog.sheet h3 { margin: 0 0 6px; }
+dialog.sheet p { margin: 0 0 12px; color: var(--ink-2); font-size: 15px; }
+dialog.sheet input { width: 100%; font: inherit; font-size: 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; margin-bottom: 14px; }
+dialog.sheet .btn { width: 100%; }

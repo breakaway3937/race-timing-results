@@ -12,7 +12,8 @@
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const niceDate = d => /^\d{4}-\d\d-\d\d$/.test(d || '') ? `${LONG[+d.slice(5, 7) - 1]} ${+d.slice(8)}, ${d.slice(0, 4)}` : (d || '');
-  const gName = g => ({ F: 'Women', M: 'Men', X: 'Non-binary' }[g] || '');
+  let XCMODE = false;
+  const gName = g => (XCMODE ? { F: 'Girls', M: 'Boys' } : { F: 'Women', M: 'Men', X: 'Non-binary' })[g] || '';
   const gOne = g => ({ F: 'Female', M: 'Male', X: 'Non-binary' }[g] || '');
   const SEARCH_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
 
@@ -23,7 +24,7 @@
     return (cache[path] = await r.json());
   }
   const loadIndex = async fresh => (index = await getJSON('races.json', fresh));
-  const loadRace = (id, fresh) => getJSON(`race-${id}.json`, fresh);
+  const loadRace = (id, fresh) => getJSON(`race-${id}.json`, fresh).then(r => { XCMODE = !!r.xc; return r; });
 
   function top(title, sub, back) {
     return `<header class="top"><div class="wrap" style="padding-bottom:${back === null ? 22 : 36}px">
@@ -91,7 +92,7 @@
         const list = ev.results.filter(match), others = ev.others.filter(match);
         body.innerHTML = (list.length || others.length) ? `<div class="list" style="margin-top:10px">${list.map(p => `
           <a class="item" href="${link(p)}"><div class="pl">${p.place}</div>
-            <div><div class="nm">${esc(p.name)}</div><div class="sub">${[p.age_group, p.location].filter(Boolean).map(esc).join(' · ')}</div></div>
+            <div><div class="nm">${esc(p.name)}</div><div class="sub">${(race.xc ? [p.team, p.grade ? 'Gr ' + p.grade : ''] : [p.age_group, p.location]).filter(Boolean).map(esc).join(' · ')}</div></div>
             <div class="tm">${esc(p.time)}${p.pace ? `<small>${esc(p.pace)}</small>` : ''}</div></a>`).join('')}
           ${others.map(p => `<a class="item" href="${link(p)}"><div class="pl"><span class="badge bad">${esc(p.status)}</span></div>
             <div><div class="nm" style="color:var(--ink-3)">${esc(p.name)}</div><div class="sub">${esc(p.location || '')}</div></div><div class="tm">${esc(p.status)}</div></a>`).join('')}</div>`
@@ -101,12 +102,15 @@
         const rec = ev.records.filter(r => r.broken).map(r => `<div class="list" style="margin-top:10px;padding:12px 14px;border-color:var(--gold)">★ <b>New course record</b> · ${esc(r.label || '')}: ${esc((by[r.by] || {}).name || '')} ${esc((by[r.by] || {}).time || '')} <span style="color:var(--ink-3)">(old ${esc(r.time)})</span></div>`).join('');
         body.innerHTML = rec + (ev.awards.map(a => `<h2>${esc(a.title)}</h2><div class="list">${a.bibs.map((b, i) => by[b]).filter(Boolean).map((p, i) => `
           <a class="item" href="${link(p)}"><div class="pl"><span class="medal ${i < 3 ? 'm' + (i + 1) : ''}">${i + 1}</span></div>
-          <div><div class="nm">${esc(p.name)}</div><div class="sub">${esc(p.location || '')}${p.age != null ? ' · ' + p.age : ''}</div></div><div class="tm">${esc(p.time)}</div></a>`).join('')}</div>`).join('')
+          <div><div class="nm">${esc(p.name)}</div><div class="sub">${[race.xc ? p.team : p.location, race.xc ? (p.grade ? `Grade ${p.grade}` : '') : (p.age != null ? `Age ${p.age}` : '')].filter(Boolean).map(esc).join(' · ')}</div></div><div class="tm">${esc(p.time)}</div></a>`).join('')}</div>`).join('')
           || '<div class="empty">Awards appear once runners finish.</div>');
       } else {
         const by = Object.fromEntries(ev.results.map(p => [p.bib, p]));
-        body.innerHTML = ev.teams.map(t => `<h2>${t.rank ? ord(t.rank) + ' · ' : ''}${esc(t.team)}${t.gender ? ' · ' + gName(t.gender) : ''} <span style="float:right">${t.complete ? esc(t.score) : 'incomplete'}</span></h2>
-          <div class="list">${t.scorers.map(b => by[b]).filter(Boolean).map(p => `<a class="item" href="${link(p)}"><div class="pl">${p.place}</div><div><div class="nm">${esc(p.name)}</div></div><div class="tm">${esc(p.time)}</div></a>`).join('')}</div>`).join('');
+        const gn = { F: race.xc ? 'Girls' : 'Women', M: race.xc ? 'Boys' : 'Men' };
+        body.innerHTML = ev.teams.filter(t => t.complete || !race.xc).map(t => `<h2>${t.rank ? ord(t.rank) + ' · ' : ''}${esc(t.team)}${t.gender ? ' · ' + (gn[t.gender] || '') : ''} <span style="float:right">${t.complete ? esc(t.score) + (race.xc ? ' pts' : '') : 'incomplete'}</span></h2>
+          ${race.xc && t.summary ? `<div class="sub" style="margin:-4px 0 6px;color:var(--ink-3)">Team places ${esc(t.summary)}</div>` : ''}
+          <div class="list">${[...t.scorers, ...(t.displacers || [])].map(b => by[b]).filter(Boolean).map(p => `<a class="item" href="${link(p)}"><div class="pl">${race.xc ? p.team_place : p.place}</div><div><div class="nm">${esc(p.name)}${(t.displacers || []).includes(p.bib) ? ' <span class="badge">displacer</span>' : ''}</div><div class="sub">${race.xc ? ord(p.place) + ' overall' : ''}</div></div><div class="tm">${esc(p.time)}</div></a>`).join('')}</div>`).join('')
+          + (race.xc && ev.teams.some(t => !t.complete) ? `<div class="foot" style="text-align:left">Incomplete teams (not scored): ${ev.teams.filter(t => !t.complete).map(t => esc(t.team)).join(', ')}</div>` : '');
       }
     };
     draw();
@@ -117,7 +121,7 @@
     app.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { state.tab = b.dataset.tab; racePage(id); });
     const ag = document.getElementById('ag'); if (ag) ag.onchange = () => { state.ag = ag.value; racePage(id); };
     document.getElementById('reload').onclick = e => { e.preventDefault(); racePage(id, true); };
-    refreshTimer = setInterval(() => { if (!document.hidden && document.activeElement?.id !== 'q') racePage(id, true); }, 90000);
+    refreshTimer = setInterval(() => { if (!document.hidden && document.activeElement?.id !== 'q') racePage(id, true); }, 30000);
   }
 
   // ---------- runner ----------
@@ -144,17 +148,18 @@
     const tile = (big, small) => `<div class="tile"><b>${big}</b><span>${small}</span></div>`;
     app.innerHTML = top(p.name, [`Bib ${esc(p.bib)}`, esc(race.name)].join(' · '), { href: `#/race/${id}`, label: race.multi_event ? `${race.name} · ${ev.label}` : race.name }) + `
       <main><div class="card" style="margin-top:-28px">
-        <div class="who">${[p.location, p.age != null ? `Age ${p.age}` : '', p.age_group, p.team].filter(Boolean).map(esc).join(' · ')}</div>
+        <div class="who">${(race.xc ? [p.team, p.grade ? `Grade ${p.grade}` : ''] : [p.location, p.age != null ? `Age ${p.age}` : '', p.age_group, p.team]).filter(Boolean).map(esc).join(' · ')}</div>
         ${p.status ? `<div class="bigtime" style="color:var(--bad)">${esc(p.status)}</div><div class="who">${{ DNF: 'Did not finish', DQ: 'Disqualified', DNS: 'Did not start' }[p.status] || ''}</div>` : `
         <div class="bigtime">${esc(p.time)}</div>
         ${awards.map(a => `<div class="award">🏅 ${esc(a)}</div>`).join('')}
         ${rec ? `<div class="award gold">★ New course record!</div>` : ''}
         <div class="tiles">${tile(`${p.place}<small>/${n}</small>`, 'Overall')}
           ${p.gender_place ? tile(`${p.gender_place}<small>/${gN}</small>`, gName(p.gender) || 'Gender') : ''}
-          ${p.ag_place ? tile(`${p.ag_place}<small>/${agN}</small>`, esc(p.age_group)) : ''}
+          ${!race.xc && p.ag_place ? tile(`${p.ag_place}<small>/${agN}</small>`, esc(p.age_group)) : ''}
+          ${race.xc && p.team_place ? tile(String(p.team_place), 'Team place') : ''}
           ${p.pace ? tile(esc(p.pace.split('/')[0]), 'Pace per ' + (p.pace.endsWith('km') ? 'km' : 'mile')) : ''}
           ${p.age_grade ? tile(p.age_grade.toFixed(1) + '%', 'Age grade') : ''}
-          ${team ? tile(team.rank ? ord(team.rank) : '–', esc(team.team)) : ''}</div>`}
+          ${team ? tile(team.rank ? ord(team.rank) : '–', esc(team.team) + (race.xc && team.complete ? ` · ${esc(team.score)} pts` : '')) : ''}</div>`}
         <div class="actions">
           <button class="btn primary" id="share">Share my result</button>
           ${p.place ? `<a class="btn" href="#/cert/${id}/${encodeURIComponent(p.bib)}">Certificate</a>` : ''}
@@ -164,7 +169,7 @@
     document.getElementById('share').onclick = async () => {
       const text = p.status ? `${p.name} · ${race.name}` : `${p.name} finished ${race.name} in ${p.time} (${ord(p.place)} overall)!`;
       try { if (navigator.share) return await navigator.share({ title: race.name, text, url: share }); } catch (e) { return; }
-      try { await navigator.clipboard.writeText(`${text} ${share}`); toast('Link copied'); } catch (e) { prompt('Copy this link:', share); }
+      try { await navigator.clipboard.writeText(`${text} ${share}`); toast('Link copied'); } catch (e) { linkSheet(share); }
     };
     // other races by the same name
     if (index || await loadIndex().catch(() => null)) {
@@ -199,6 +204,15 @@
 
   function notFound(msg, back) {
     app.innerHTML = top('Not found', '', { href: back || '#/', label: back ? 'Back to results' : 'All races' }) + `<main><div class="empty" style="margin-top:20px">${esc(msg)}</div></main>`;
+  }
+  function linkSheet(url) {
+    // themed pop-up with the link selected, for browsers that can't copy automatically
+    const d = document.createElement('dialog'); d.className = 'sheet';
+    d.innerHTML = `<div class="bar"></div><h3>Copy your result link</h3><p>Press and hold the link to copy it.</p>
+      <input readonly value="${esc(url)}"><button class="btn primary">Done</button>`;
+    d.querySelector('button').onclick = () => { d.close(); d.remove(); };
+    d.addEventListener('cancel', () => d.remove());
+    document.body.appendChild(d); d.showModal(); d.querySelector('input').select();
   }
   function toast(msg) {
     const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t);
